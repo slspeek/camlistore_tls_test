@@ -2,6 +2,7 @@
 	"servers": {
 		"devcam": {
 			"server": ["_env", "${CAMLI_SERVER}", "http://localhost:3179/"],
+			"trustedCerts": ["f34cee2031d9800c7ab9"],
 			"auth": ["_env", "${CAMLI_AUTH}"],
 			"default": true
 		}

@@ -1,6 +1,8 @@
 { "_for-emacs": "-*- mode: js2;-*-",
   "handlerConfig": true,
   "https": true,
+	"httpsCert": ["_env", "${CAMLI_SRC}/config/tls.crt"],
+	"httpsKey": "/home/steven/go/src/camlistore.org/config/tls.key",
   "baseURL": ["_env", "${CAMLI_BASE_URL}"],
   "auth": "userpass:testuser:passTestWorld:+localhost",
   "prefixes": {
