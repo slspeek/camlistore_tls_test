@@ -17,7 +17,9 @@ limitations under the License.
 package test
 
 import (
+	"bufio"
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -28,7 +30,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -37,6 +39,8 @@ import (
 	"camlistore.org/pkg/blob"
 	"camlistore.org/pkg/osutil"
 )
+
+var certExp = regexp.MustCompile(`fingerprint: (\w+)$`)
 
 // World defines an integration test world.
 //
@@ -49,6 +53,8 @@ type World struct {
 	tempDir  string
 	listener net.Listener // randomly chosen 127.0.0.1 port for the server
 	port     int
+	tls      bool
+	certId   string
 
 	server    *exec.Cmd
 	isRunning int32 // state of the camlistored server. Access with sync/atomic only.
@@ -72,13 +78,13 @@ func camliSourceRoot() (string, error) {
 // NewWorld returns a new test world.
 // It requires that GOPATH is set to find the "camlistore.org" root.
 func NewWorld() (*World, error) {
-	return WorldFromConfig("server-config.json")
+	return WorldFromConfig("server-config.json", false)
 }
 
 // WorldFromConfig returns a new test world based on the given configuration file.
 // This cfg is the server config relative to pkg/test/testdata.
 // It requires that GOPATH is set to find the "camlistore.org" root.
-func WorldFromConfig(cfg string) (*World, error) {
+func WorldFromConfig(cfg string, tls bool) (*World, error) {
 	root, err := camliSourceRoot()
 	if err != nil {
 		return nil, err
@@ -91,9 +97,28 @@ func WorldFromConfig(cfg string) (*World, error) {
 	return &World{
 		camRoot:  root,
 		config:   cfg,
+		tls:      tls,
 		listener: ln,
 		port:     ln.Addr().(*net.TCPAddr).Port,
 	}, nil
+}
+
+func extractCertId(b bytes.Buffer) (string, error) {
+	scanner := bufio.NewScanner(&b)
+	for scanner.Scan() {
+		if m := certExp.FindStringSubmatch(scanner.Text()); m != nil {
+			return m[1], nil
+		}
+	}
+	return "", fmt.Errorf("Unable to find server certificate fingerprint")
+}
+
+func (w *World) clientConfigDir() string {
+	if w.tls {
+		return filepath.Join(w.camRoot, "config", "dev-client-dir-tls")
+	} else {
+		return filepath.Join(w.camRoot, "config", "dev-client-dir")
+	}
 }
 
 func (w *World) Addr() string {
@@ -167,18 +192,19 @@ func (w *World) Start() error {
 		)
 		var buf bytes.Buffer
 		if testing.Verbose() {
-			w.server.Stdout = os.Stdout
-			w.server.Stderr = os.Stderr
+			w.server.Stdout = io.MultiWriter(os.Stdout, &buf)
+			w.server.Stderr = io.MultiWriter(os.Stderr, &buf)
 		} else {
 			w.server.Stdout = &buf
 			w.server.Stderr = &buf
 		}
 		w.server.Dir = w.tempDir
 		w.server.Env = append(os.Environ(),
+			"CAMLI_SRC="+w.camRoot,
 			"CAMLI_DEBUG=1",
 			"CAMLI_ROOT="+w.tempDir,
 			"CAMLI_SECRET_RING="+filepath.Join(w.camRoot, filepath.FromSlash("pkg/jsonsign/testdata/test-secring.gpg")),
-			"CAMLI_BASE_URL=http://127.0.0.1:"+strconv.Itoa(w.port),
+			"CAMLI_BASE_URL="+w.ServerBaseURL(),
 		)
 		listenerFD, err := w.listener.(*net.TCPListener).File()
 		if err != nil {
@@ -201,8 +227,12 @@ func (w *World) Start() error {
 		upc := make(chan bool)
 		timeoutc := make(chan bool)
 		go func() {
+			tr := &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+			client := &http.Client{Transport: tr}
 			for i := 0; i < 100; i++ {
-				res, err := http.Get("http://127.0.0.1:" + strconv.Itoa(w.port))
+				res, err := client.Get(w.ServerBaseURL())
 				if err == nil {
 					res.Body.Close()
 					upc <- true
@@ -223,6 +253,13 @@ func (w *World) Start() error {
 		case <-upc:
 			if err := w.Ping(); err != nil {
 				return err
+			}
+			if w.tls {
+				if certId, err := extractCertId(buf); err != nil {
+					return err
+				} else {
+					w.certId = certId
+				}
 			}
 			// Success.
 		}
@@ -286,7 +323,7 @@ func (w *World) CmdWithEnv(binary string, env []string, args ...string) *exec.Cm
 			args = append([]string{"-verbose"}, args...)
 		}
 		cmd = exec.Command(filepath.Join(w.camRoot, "bin", binary), args...)
-		clientConfigDir := filepath.Join(w.camRoot, "config", "dev-client-dir")
+		clientConfigDir := w.clientConfigDir()
 		cmd.Env = append([]string{
 			"CAMLI_CONFIG_DIR=" + clientConfigDir,
 			// Respected by env expansions in config/dev-client-dir/client-config.json:
@@ -295,14 +332,25 @@ func (w *World) CmdWithEnv(binary string, env []string, args ...string) *exec.Cm
 			"CAMLI_KEYID=" + w.ClientIdentity(),
 			"CAMLI_AUTH=userpass:testuser:passTestWorld",
 		}, env...)
+		if w.tls {
+			cmd.Env = append(cmd.Env, "CAMLI_CERT_ID="+w.certId)
+		}
 	default:
 		panic("Unknown binary " + binary)
 	}
 	return cmd
 }
 
+func (w *World) protocol() string {
+	if w.tls {
+		return "https://"
+	} else {
+		return "http://"
+	}
+}
+
 func (w *World) ServerBaseURL() string {
-	return fmt.Sprintf("http://127.0.0.1:%d", w.port)
+	return fmt.Sprintf("%s127.0.0.1:%d", w.protocol(), w.port)
 }
 
 var theWorld *World

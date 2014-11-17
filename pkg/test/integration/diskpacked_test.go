@@ -40,7 +40,7 @@ func BenchmarkDiskpacked(b *testing.B) {
 }
 
 func benchmarkWrite(b *testing.B, cfg string) {
-	w, err := test.WorldFromConfig(cfg)
+	w, err := test.WorldFromConfig(cfg, false)
 	if err != nil {
 		b.Fatalf("could not create server for config: %v\nError: %v", cfg, err)
 	}
