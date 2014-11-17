@@ -81,6 +81,11 @@ func NewWorld() (*World, error) {
 	return WorldFromConfig("server-config.json", false)
 }
 
+// SetTLS configures whether to use HTTPS ot HTTP.
+func (w *World) SetTLS(b bool) {
+	w.tls = b
+}
+
 // WorldFromConfig returns a new test world based on the given configuration file.
 // This cfg is the server config relative to pkg/test/testdata.
 // It requires that GOPATH is set to find the "camlistore.org" root.
@@ -186,7 +191,7 @@ func (w *World) Start() error {
 		w.server = exec.Command(
 			filepath.Join(w.camRoot, "bin", "camlistored"),
 			"--openbrowser=false",
-			"--configfile="+filepath.Join(w.camRoot, "pkg", "test", "testdata", w.config),
+			"--configfile="+w.configFile(),
 			"--listen=FD:3",
 			"--pollparent=true",
 		)
@@ -262,6 +267,13 @@ func (w *World) Start() error {
 				}
 			}
 			// Success.
+			if w.tls {
+				if certId, err := extractCertId(buf); err != nil {
+					return err
+				} else {
+					w.certId = certId
+				}
+			}
 		}
 	}
 	return nil
