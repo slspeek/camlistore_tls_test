@@ -93,7 +93,15 @@ func TestIntegrationRun(t *testing.T) {
 	const attrKey = "key"
 	const attrValue = "value"
 
-	w := test.GetWorld(t)
+	w, err := test.WorldFromConfig("server-config.json")
+	if err != nil {
+		t.Fatalf("Error finding test world: %v", err)
+	}
+	err = w.Start()
+	if err != nil {
+		t.Fatalf("Error starting test world: %v", err)
+	}
+	defer w.Stop()
 	baseURL := w.ServerBaseURL()
 
 	// TODO(mpl): add a utility in integration package to provide a client that

@@ -78,7 +78,12 @@ func camliSourceRoot() (string, error) {
 // NewWorld returns a new test world.
 // It requires that GOPATH is set to find the "camlistore.org" root.
 func NewWorld() (*World, error) {
-	return WorldFromConfig("server-config.json", false)
+	w, err := WorldFromConfig("server-config-tls.json", true)
+	if err != nil {
+		return nil, err
+	}
+	w.SetTLS(true)
+	return w, nil
 }
 
 // SetTLS configures whether to use HTTPS ot HTTP.
@@ -191,7 +196,7 @@ func (w *World) Start() error {
 		w.server = exec.Command(
 			filepath.Join(w.camRoot, "bin", "camlistored"),
 			"--openbrowser=false",
-			"--configfile="+w.configFile(),
+			"--configfile="+filepath.Join(w.camRoot, "pkg", "test", "testdata", w.config),
 			"--listen=FD:3",
 			"--pollparent=true",
 		)

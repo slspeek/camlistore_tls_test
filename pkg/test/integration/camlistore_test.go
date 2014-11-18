@@ -56,7 +56,15 @@ func TestCamputPermanode(t *testing.T) {
 }
 
 func TestWebsocketQuery(t *testing.T) {
-	w := test.GetWorld(t)
+	w, err := test.WorldFromConfig("server-config.json")
+	if err != nil {
+		t.Fatalf("Error finding test world: %v", err)
+	}
+	err = w.Start()
+	if err != nil {
+		t.Fatalf("Error starting test world: %v", err)
+	}
+	defer w.Stop()
 	pn := w.NewPermanode(t)
 	test.MustRunCmd(t, w.Cmd("camput", "attr", pn.String(), "tag", "foo"))
 
@@ -116,7 +124,15 @@ func TestWebsocketQuery(t *testing.T) {
 }
 
 func TestInternalHandler(t *testing.T) {
-	w := test.GetWorld(t)
+	w, err := test.WorldFromConfig("server-config.json")
+	if err != nil {
+		t.Fatalf("Error finding test world: %v", err)
+	}
+	err = w.Start()
+	if err != nil {
+		t.Fatalf("Error starting test world: %v", err)
+	}
+	defer w.Stop()
 	tests := map[string]int{
 		"/no-http-storage/":                                                    401,
 		"/no-http-handler/":                                                    401,
