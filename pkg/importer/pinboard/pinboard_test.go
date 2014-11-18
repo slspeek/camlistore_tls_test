@@ -93,7 +93,7 @@ func TestIntegrationRun(t *testing.T) {
 	const attrKey = "key"
 	const attrValue = "value"
 
-	w, err := test.WorldFromConfig("server-config.json")
+	w, err := test.WorldFromConfig("server-config.json", false)
 	if err != nil {
 		t.Fatalf("Error finding test world: %v", err)
 	}

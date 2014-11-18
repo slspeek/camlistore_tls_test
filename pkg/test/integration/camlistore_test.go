@@ -56,7 +56,7 @@ func TestCamputPermanode(t *testing.T) {
 }
 
 func TestWebsocketQuery(t *testing.T) {
-	w, err := test.WorldFromConfig("server-config.json")
+	w, err := test.WorldFromConfig("server-config.json", false)
 	if err != nil {
 		t.Fatalf("Error finding test world: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestWebsocketQuery(t *testing.T) {
 }
 
 func TestInternalHandler(t *testing.T) {
-	w, err := test.WorldFromConfig("server-config.json")
+	w, err := test.WorldFromConfig("server-config.json", false)
 	if err != nil {
 		t.Fatalf("Error finding test world: %v", err)
 	}
